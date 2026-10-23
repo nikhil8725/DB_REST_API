@@ -3,5 +3,6 @@ uvicorn[standard]>=0.30.0
 pydantic>=2.8.0
 sqlalchemy>=2.0.30
 aiosqlite>=0.20.0
+greenlet>=3.0.0
 apscheduler>=3.10.4
 python-dateutil>=2.9.0
