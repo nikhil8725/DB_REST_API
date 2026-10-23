@@ -11,11 +11,11 @@ router = APIRouter(prefix="/api/v1/trades", tags=["Trades"])
 
 
 # Default system clock provider, can be overridden in tests
-def get_clock_service() -> IClockService:
+async def get_clock_service() -> IClockService:
     return SystemClockService()
 
 
-def get_trade_service(
+async def get_trade_service(
     session: AsyncSession = Depends(get_db_session),
     clock: IClockService = Depends(get_clock_service),
 ) -> TradeStoreService:

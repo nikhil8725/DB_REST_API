@@ -45,6 +45,7 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.coverage.run]
 source = ["app"]
 branch = true
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
 show_missing = true

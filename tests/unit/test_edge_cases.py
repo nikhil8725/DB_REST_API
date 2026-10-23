@@ -42,3 +42,25 @@ async def test_database_init_and_get_session():
     async for session in get_db_session():
         assert session is not None
         break
+
+
+@pytest.mark.asyncio
+async def test_general_trade_store_exception_handler():
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api.exception_handlers import register_exception_handlers
+    from app.domain.exceptions import TradeStoreException
+
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/trigger-error")
+    async def trigger():
+        raise TradeStoreException("Generic domain failure")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.get("/trigger-error")
+        assert res.status_code == 400
+        assert res.json()["detail"] == "Generic domain failure"

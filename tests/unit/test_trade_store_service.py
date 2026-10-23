@@ -173,3 +173,55 @@ async def test_rule_2_accept_today_maturity_date(service_fixture):
     res = await service.process_trade(dto_today, correlation_id="corr-9")
     assert res.trade_id == "T4"
     assert res.expired == "N"
+
+
+@pytest.mark.asyncio
+async def test_get_trade_not_found(service_fixture):
+    service, _ = service_fixture
+    res = await service.get_trade("NON_EXISTENT")
+    assert res is None
+
+
+@pytest.mark.asyncio
+async def test_list_trades_with_and_without_expiry(service_fixture):
+    service, clock = service_fixture
+    clock.set_date(date(2026, 10, 23))
+
+    await service.process_trade(
+        TradeCreateDTO(
+            trade_id="T1",
+            version=1,
+            counter_party_id="CP-1",
+            portfolio_id="B1",
+            maturity_date=date(2026, 10, 24),
+        )
+    )
+    await service.process_trade(
+        TradeCreateDTO(
+            trade_id="T2",
+            version=1,
+            counter_party_id="CP-2",
+            portfolio_id="B1",
+            maturity_date=date(2026, 10, 28),
+        )
+    )
+
+    trades = await service.list_trades()
+    assert len(trades) == 2
+    assert all(t.expired == "N" for t in trades)
+
+    # Advance clock past T1 maturity
+    clock.set_date(date(2026, 10, 25))
+    trades_after = await service.list_trades()
+    assert len(trades_after) == 2
+    t1 = next(t for t in trades_after if t.trade_id == "T1")
+    t2 = next(t for t in trades_after if t.trade_id == "T2")
+    assert t1.expired == "Y"
+    assert t2.expired == "N"
+
+
+@pytest.mark.asyncio
+async def test_run_expiry_sweep_zero_trades(service_fixture):
+    service, _ = service_fixture
+    count = await service.run_expiry_sweep()
+    assert count == 0

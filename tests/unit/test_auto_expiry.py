@@ -95,5 +95,42 @@ async def test_scheduler_lifecycle(expiry_setup):
     # Start and stop cleanly
     await scheduler.start()
     assert scheduler.is_running is True
+    # Calling start again when running is a no-op
+    await scheduler.start()
     await scheduler.stop()
     assert scheduler.is_running is False
+    # Calling stop again when stopped is a no-op
+    await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_run_single_sweep(expiry_setup):
+    service, clock, session_factory = expiry_setup
+    clock.set_date(date(2026, 10, 23))
+
+    # Ingest trade maturing on 2026-10-24
+    await service.process_trade(
+        TradeCreateDTO(
+            trade_id="T3",
+            version=1,
+            counter_party_id="CP-3",
+            portfolio_id="B1",
+            maturity_date=date(2026, 10, 24),
+        ),
+        correlation_id="exp-3",
+    )
+
+    scheduler = TradeExpiryScheduler(
+        session_factory=session_factory,
+        clock=clock,
+        interval_seconds=1,
+    )
+
+    # 1. Sweep before maturity -> 0 expired
+    zero_count = await scheduler.run_single_sweep()
+    assert zero_count == 0
+
+    # 2. Advance clock past maturity -> 1 expired
+    clock.set_date(date(2026, 10, 25))
+    expired_count = await scheduler.run_single_sweep()
+    assert expired_count == 1
