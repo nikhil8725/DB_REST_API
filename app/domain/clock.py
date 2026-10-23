@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Protocol
 
 
@@ -18,10 +18,10 @@ class SystemClockService:
     """Production clock using system UTC time."""
 
     def get_today(self) -> date:
-        return datetime.now(timezone.utc).date()
+        return datetime.now(UTC).date()
 
     def get_now(self) -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
 
 class FixedClockService:
@@ -30,13 +30,13 @@ class FixedClockService:
     def __init__(self, fixed_date: date):
         self._fixed_date = fixed_date
         self._fixed_datetime = datetime(
-            fixed_date.year, fixed_date.month, fixed_date.day, 12, 0, 0, tzinfo=timezone.utc
+            fixed_date.year, fixed_date.month, fixed_date.day, 12, 0, 0, tzinfo=UTC
         )
 
     def set_date(self, new_date: date) -> None:
         self._fixed_date = new_date
         self._fixed_datetime = datetime(
-            new_date.year, new_date.month, new_date.day, 12, 0, 0, tzinfo=timezone.utc
+            new_date.year, new_date.month, new_date.day, 12, 0, 0, tzinfo=UTC
         )
 
     def get_today(self) -> date:

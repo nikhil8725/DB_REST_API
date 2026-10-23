@@ -1,12 +1,11 @@
-import pytest
 from datetime import date
+
+import pytest
 from pydantic import ValidationError
 
 from app.application.dtos import TradeCreateDTO
 from app.domain.clock import SystemClockService
-from app.domain.exceptions import TradeStoreException
 from app.infrastructure.database import get_db_session, init_db
-from app.infrastructure.scheduler import TradeExpiryScheduler
 
 
 def test_dto_validation_invalid_character():

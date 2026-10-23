@@ -1,4 +1,3 @@
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.dtos import TradeCreateDTO, TradeResponseDTO
@@ -24,7 +23,7 @@ class TradeStoreService:
     async def process_trade(
         self,
         dto: TradeCreateDTO,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> TradeResponseDTO:
         """
         Processes an incoming trade transmission applying all validation rules:
@@ -131,7 +130,7 @@ class TradeStoreService:
         await self.session.commit()
         return self._to_dto(updated)
 
-    async def get_trade(self, trade_id: str) -> Optional[TradeResponseDTO]:
+    async def get_trade(self, trade_id: str) -> TradeResponseDTO | None:
         """Fetch trade with read-time dynamic expiry check."""
         trade = await self.repository.get_by_id(trade_id)
         if not trade:

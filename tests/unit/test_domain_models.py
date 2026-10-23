@@ -1,6 +1,5 @@
 from datetime import date
 
-from app.domain.exceptions import LowerVersionRejectedException, PastMaturityDateException
 from app.domain.models import Trade
 
 

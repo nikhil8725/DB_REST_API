@@ -1,7 +1,7 @@
 import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.middleware import CorrelationIdMiddleware

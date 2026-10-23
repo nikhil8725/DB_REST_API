@@ -1,0 +1,116 @@
+@startuml sequence_trade_ingestion
+skinparam style strictuml
+autonumber
+skinparam monochrome false
+skinparam roundcorner 8
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+
+title Sequence Diagram: Trade Ingestion & Validation Pipeline (Deutsche Bank Trade Store)
+
+actor "Trading Client / Kafka Ingest" as Client
+box "API Layer (Presentation)" #E8F4F8
+    participant "CorrelationMiddleware" as Middleware
+    participant "TradeController\n(FastAPI)" as Controller
+end box
+
+box "Application & Domain Layer" #FFF9E6
+    participant "TradeStoreService" as Service
+    participant "IClockService\n(Time Provider)" as Clock
+    participant "ValidationEngine" as Validator
+end box
+
+box "Persistence Layer (ACID Store)" #EAF7EA
+    participant "ITradeRepository\n(SQLAlchemy)" as Repo
+    database "Trade Store DB\n(SQLite / PostgreSQL)" as DB
+end box
+
+== 1. Ingestion & Pre-Validation ==
+Client -> Middleware : POST /api/v1/trades (Trade Payload)
+activate Middleware
+Middleware -> Middleware : Generate / Attach X-Correlation-ID
+Middleware -> Controller : Dispatch Request
+activate Controller
+
+Controller -> Controller : Pydantic v2 Schema & Whitelist Validation\n(Type-checking, regex: TradeId, PortfolioId, CP-Id)
+alt Invalid Payload Format / Injection Attempt
+    Controller --> Client : HTTP 400 Bad Request (RFC-7807 Error)
+end
+
+Controller -> Service : process_trade(trade_dto, correlation_id)
+activate Service
+
+== 2. Temporal Validation (Maturity Check) ==
+Service -> Clock : get_current_date_utc()
+activate Clock
+Clock --> Service : current_date (UTC)
+deactivate Clock
+
+Service -> Validator : validate_maturity_date(trade_dto.maturity_date, current_date)
+activate Validator
+alt Maturity Date < current_date (Past Date)
+    Validator --> Service : raise PastMaturityDateException
+    Service --> Controller : PastMaturityDateException("Maturity date in past")
+    Controller --> Client : HTTP 422 Unprocessable Entity\n{"error": "Maturity date cannot be earlier than today"}
+end
+Validator --> Service : Valid (maturity_date >= current_date)
+deactivate Validator
+
+== 3. Concurrency-Safe Version Check & Persistence ==
+Service -> Repo : get_trade_for_update(trade_dto.trade_id)
+activate Repo
+Repo -> DB : SELECT * FROM trades WHERE trade_id = :id FOR UPDATE
+DB --> Repo : existing_trade (or NULL)
+Repo --> Service : existing_trade
+deactivate Repo
+
+alt Case A: No Existing Record Found (New Trade)
+    Service -> Service : Instantiate Trade(expired='N', created_date=today)
+    Service -> Repo : save_trade(new_trade)
+    activate Repo
+    Repo -> DB : INSERT INTO trades (trade_id, version, ..., expired='N')
+    Repo -> DB : INSERT INTO trade_audit_events (action='INSERT', version=v)
+    DB --> Repo : Success
+    Repo --> Service : Persisted Trade
+    deactivate Repo
+    Service --> Controller : TradeResponseDTO (Stored)
+    Controller --> Client : HTTP 201 Created\n{"trade_id": "T1", "version": 1, "expired": "N"}
+
+else Case B: Lower Version Received (Incoming Version < Existing Version)
+    Service -> Service : raise LowerVersionRejectedException(incoming_v, current_v)
+    Service -> Repo : log_rejection_audit(trade_id, incoming_v, reason)
+    activate Repo
+    Repo -> DB : INSERT INTO trade_audit_events (action='REJECTED_LOWER_VERSION')
+    deactivate Repo
+    Service --> Controller : LowerVersionRejectedException
+    Controller --> Client : HTTP 422 Unprocessable Entity\n{"error": "Lower version rejected. Current version is higher."}
+
+else Case C: Same Version Received (Incoming Version == Existing Version)
+    Service -> Service : Update existing trade attributes\n(Replace counter_party, portfolio, maturity_date, created_date=today)
+    Service -> Repo : update_trade(updated_trade)
+    activate Repo
+    Repo -> DB : UPDATE trades SET ... WHERE trade_id = :id AND version = :v
+    Repo -> DB : INSERT INTO trade_audit_events (action='OVERWRITE_SAME_VERSION')
+    DB --> Repo : Success
+    Repo --> Service : Persisted Trade
+    deactivate Repo
+    Service --> Controller : TradeResponseDTO (Updated)
+    Controller --> Client : HTTP 200 OK\n{"trade_id": "T1", "version": 1, "status": "Replaced"}
+
+else Case D: Higher Version Received (Incoming Version > Existing Version)
+    Service -> Service : Update trade to new version & attributes\n(version = new_version, expired='N', created_date=today)
+    Service -> Repo : update_trade(updated_trade)
+    activate Repo
+    Repo -> DB : UPDATE trades SET version = :new_v, ... WHERE trade_id = :id
+    Repo -> DB : INSERT INTO trade_audit_events (action='UPDATE_HIGHER_VERSION')
+    DB --> Repo : Success
+    Repo --> Service : Persisted Trade
+    deactivate Repo
+    Service --> Controller : TradeResponseDTO (Stored New Version)
+    Controller --> Client : HTTP 200 OK (or 201 Created)\n{"trade_id": "T2", "version": 2, "expired": "N"}
+end
+
+deactivate Service
+deactivate Controller
+deactivate Middleware
+@enduml

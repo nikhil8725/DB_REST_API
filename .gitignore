@@ -36,6 +36,7 @@ coverage.xml
 .env
 .idea/
 .vscode/
+.DS_Store
 *.swp
 *.swo
 

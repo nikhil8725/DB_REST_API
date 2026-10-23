@@ -1,0 +1,147 @@
+@startuml class_diagram
+skinparam classAttributeIconSize 0
+skinparam monochrome false
+skinparam roundcorner 8
+skinparam linetype ortho
+
+title Class Diagram: Clean / Hexagonal Architecture (Deutsche Bank Trade Store)
+
+package "Domain Layer (Core Business Rules)" #FFF9E6 {
+    class Trade <<Entity>> {
+        - trade_id: str
+        - version: int
+        - counter_party_id: str
+        - portfolio_id: str
+        - maturity_date: date
+        - created_date: date
+        - expired: str
+        + is_expired(current_date: date): bool
+        + replace_content(new_trade: Trade): void
+        + upgrade_version(new_trade: Trade): void
+    }
+
+    class TradeAuditEvent <<Entity>> {
+        - event_id: int
+        - trade_id: str
+        - version: int
+        - action: str
+        - correlation_id: str
+        - timestamp: datetime
+        - details: str
+    }
+
+    interface IClockService <<Interface>> {
+        + get_current_date(): date
+        + get_current_datetime(): datetime
+    }
+
+    abstract class TradeStoreException <<Exception>> {
+        + message: str
+        + correlation_id: str
+    }
+
+    class LowerVersionRejectedException {
+        + trade_id: str
+        + incoming_version: int
+        + current_version: int
+    }
+
+    class PastMaturityDateException {
+        + trade_id: str
+        + maturity_date: date
+        + current_date: date
+    }
+
+    TradeStoreException <|-- LowerVersionRejectedException
+    TradeStoreException <|-- PastMaturityDateException
+}
+
+package "Application Layer (Use Cases & DTOs)" #E8F4F8 {
+    class TradeCreateDTO <<ValueObject>> {
+        + trade_id: str
+        + version: int
+        + counter_party_id: str
+        + portfolio_id: str
+        + maturity_date: date
+    }
+
+    class TradeResponseDTO <<ValueObject>> {
+        + trade_id: str
+        + version: int
+        + counter_party_id: str
+        + portfolio_id: str
+        + maturity_date: date
+        + created_date: date
+        + expired: str
+    }
+
+    interface ITradeRepository <<Interface>> {
+        + get_by_trade_id(trade_id: str): Optional[Trade]
+        + get_trade_for_update(trade_id: str): Optional[Trade]
+        + save(trade: Trade): Trade
+        + update(trade: Trade): Trade
+        + list_all(): List[Trade]
+        + mark_expired_trades(cutoff_date: date): int
+        + record_audit_event(event: TradeAuditEvent): void
+    }
+
+    class TradeStoreService {
+        - repository: ITradeRepository
+        - clock: IClockService
+        + process_trade(dto: TradeCreateDTO, correlation_id: str): TradeResponseDTO
+        + get_trade(trade_id: str): Optional[TradeResponseDTO]
+        + list_all_trades(): List[TradeResponseDTO]
+        + trigger_expiry_sweep(): int
+    }
+
+    TradeStoreService --> ITradeRepository
+    TradeStoreService --> IClockService
+    TradeStoreService ..> TradeCreateDTO
+    TradeStoreService ..> TradeResponseDTO
+}
+
+package "Infrastructure Layer (Persistence & Adapters)" #EAF7EA {
+    class SystemClockService implements IClockService {
+        + get_current_date(): date
+        + get_current_datetime(): datetime
+    }
+
+    class FixedClockService implements IClockService {
+        - fixed_date: date
+        + set_date(d: date): void
+        + get_current_date(): date
+    }
+
+    class SQLAlchemyTradeRepository implements ITradeRepository {
+        - db_session: AsyncSession
+        + get_by_trade_id(trade_id: str): Optional[Trade]
+        + get_trade_for_update(trade_id: str): Optional[Trade]
+        + save(trade: Trade): Trade
+        + update(trade: Trade): Trade
+        + list_all(): List[Trade]
+        + mark_expired_trades(cutoff_date: date): int
+        + record_audit_event(event: TradeAuditEvent): void
+    }
+
+    class BackgroundExpiryScheduler {
+        - service: TradeStoreService
+        - interval_seconds: int
+        + start(): void
+        + stop(): void
+        + run_sweep(): void
+    }
+
+    BackgroundExpiryScheduler --> TradeStoreService
+}
+
+package "Presentation / API Layer (FastAPI)" #F0F4FF {
+    class TradeController {
+        - service: TradeStoreService
+        + ingest_trade(payload: TradeCreateDTO, x_correlation_id: str): Response
+        + get_trade(trade_id: str): Response
+        + list_trades(): Response
+    }
+
+    TradeController --> TradeStoreService
+}
+@enduml

@@ -1,5 +1,6 @@
 import os
 from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,6 +12,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 class Base(DeclarativeBase):
     """Base declarative class for all SQLAlchemy ORM models."""
+
     pass
 
 

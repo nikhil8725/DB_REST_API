@@ -1,6 +1,7 @@
 import re
 from datetime import date
 from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -47,7 +48,9 @@ class TradeCreateDTO(BaseModel):
             raise ValueError("Identifier must be a string")
         stripped = value.strip().upper()
         if not re.match(r"^[A-Z0-9_-]{1,32}$", stripped):
-            raise ValueError(f"Identifier '{value}' contains invalid characters. Must be alphanumeric or hyphen/underscore.")
+            raise ValueError(
+                f"Identifier '{value}' contains invalid characters. Must be alphanumeric or hyphen/underscore."
+            )
         return stripped
 
 

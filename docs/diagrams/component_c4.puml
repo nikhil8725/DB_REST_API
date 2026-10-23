@@ -1,0 +1,59 @@
+@startuml component_c4
+skinparam monochrome false
+skinparam roundcorner 8
+skinparam linetype ortho
+
+title C4 Component Diagram: Deutsche Bank Trade Store REST Architecture
+
+package "Trade Store System" {
+    package "FastAPI Application" #E8F4F8 {
+        [Security & Correlation Middleware] as Middleware
+        [Trade API Router\n(FastAPI Endpoints)] as Router
+        [Pydantic v2 Schema Validator] as Validator
+        [Global RFC-7807 Exception Handler] as ErrorHandler
+        
+        Router --> Middleware
+        Router --> Validator
+        Router --> ErrorHandler
+    }
+
+    package "Application Core" #FFF9E6 {
+        [Trade Store Application Service] as Service
+        [Validation Domain Engine] as DomainValidator
+        [Clock Provider Service\n(IClockService)] as Clock
+        
+        Service --> DomainValidator
+        Service --> Clock
+    }
+
+    package "Background Engine" #FFEBE8 {
+        [Automated Expiry Scheduler\n(Asyncio Background Task)] as Scheduler
+        Scheduler --> Service : Periodic Sweeps
+    }
+
+    package "Infrastructure & Persistence" #EAF7EA {
+        [SQLAlchemy 2.0 Async Repository] as Repo
+        [Audit Logger Adapter] as AuditLogger
+        
+        Service --> Repo
+        Service --> AuditLogger
+    }
+
+    database "Relational Store\n(SQLite / PostgreSQL)" as DB {
+        [Trades Table\n(Atomic Version Locks)] as TradesTable
+        [Trade Audit Events Table\n(Immutable Log)] as AuditTable
+    }
+
+    Repo --> TradesTable
+    AuditLogger --> AuditTable
+}
+
+cloud "External Actors" {
+    [Trading Systems / Ingestion Clients] as Trader
+    [Risk Management & Reporting Consumers] as RiskSystem
+}
+
+Trader --> Router : HTTPS / REST (Ingest Trades)
+RiskSystem --> Router : HTTPS / REST (Query Active Trades)
+Router --> Service : Dispatches Commands & Queries
+@enduml

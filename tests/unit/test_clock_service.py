@@ -1,4 +1,4 @@
-from datetime import date, timezone
+from datetime import date
 
 from app.domain.clock import FixedClockService, SystemClockService
 

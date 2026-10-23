@@ -1,11 +1,10 @@
 from datetime import date
-from typing import Optional
 
 
 class TradeStoreException(Exception):
     """Base exception for all Trade Store domain errors."""
 
-    def __init__(self, message: str, correlation_id: Optional[str] = None):
+    def __init__(self, message: str, correlation_id: str | None = None):
         super().__init__(message)
         self.message = message
         self.correlation_id = correlation_id
@@ -19,7 +18,7 @@ class LowerVersionRejectedException(TradeStoreException):
         trade_id: str,
         incoming_version: int,
         current_version: int,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ):
         msg = (
             f"Trade '{trade_id}' rejected: received version {incoming_version} is lower "
@@ -39,7 +38,7 @@ class PastMaturityDateException(TradeStoreException):
         trade_id: str,
         maturity_date: date,
         current_date: date,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ):
         msg = (
             f"Trade '{trade_id}' rejected: maturity date {maturity_date.isoformat()} "

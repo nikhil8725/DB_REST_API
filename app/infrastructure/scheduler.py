@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.clock import IClockService
@@ -21,7 +21,7 @@ class TradeExpiryScheduler:
         self.session_factory = session_factory
         self.clock = clock
         self.interval_seconds = interval_seconds
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
 
     @property
@@ -56,7 +56,7 @@ class TradeExpiryScheduler:
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
         logger.info("Trade expiry worker stopped cleanly.")

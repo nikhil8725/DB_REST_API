@@ -1,5 +1,5 @@
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,7 @@ class SQLAlchemyTradeRepository:
             updated_at=orm.updated_at,
         )
 
-    async def get_by_id(self, trade_id: str) -> Optional[Trade]:
+    async def get_by_id(self, trade_id: str) -> Trade | None:
         """Fetch trade by Trade ID."""
         clean_id = trade_id.strip().upper()
         stmt = select(TradeORM).where(TradeORM.trade_id == clean_id)
@@ -33,7 +33,7 @@ class SQLAlchemyTradeRepository:
         orm = result.scalar_one_or_none()
         return self._to_entity(orm) if orm else None
 
-    async def get_for_update(self, trade_id: str) -> Optional[Trade]:
+    async def get_for_update(self, trade_id: str) -> Trade | None:
         """Fetch trade with a row lock to serialize concurrent access."""
         clean_id = trade_id.strip().upper()
         # SQLite doesn't support with_for_update(), but PostgreSQL does
@@ -49,7 +49,7 @@ class SQLAlchemyTradeRepository:
 
     async def save(self, trade: Trade) -> Trade:
         """Insert a new trade record into the database."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         orm = TradeORM(
             trade_id=trade.trade_id,
             version=trade.version,
@@ -66,7 +66,7 @@ class SQLAlchemyTradeRepository:
 
     async def update(self, trade: Trade) -> Trade:
         """Update an existing trade record."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(TradeORM)
             .where(TradeORM.trade_id == trade.trade_id)
@@ -92,7 +92,7 @@ class SQLAlchemyTradeRepository:
 
     async def expire_trades_before(self, cutoff_date: date) -> int:
         """Bulk-update all trades whose maturity_date < cutoff_date and expired == 'N'."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(TradeORM)
             .where(TradeORM.maturity_date < cutoff_date, TradeORM.expired == "N")
@@ -107,8 +107,8 @@ class SQLAlchemyTradeRepository:
         trade_id: str,
         version: int,
         action: str,
-        correlation_id: Optional[str] = None,
-        details: Optional[str] = None,
+        correlation_id: str | None = None,
+        details: str | None = None,
     ) -> None:
         """Log an immutable audit entry."""
         audit = TradeAuditEventORM(
@@ -116,7 +116,7 @@ class SQLAlchemyTradeRepository:
             version=version,
             action=action,
             correlation_id=correlation_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             details=details,
         )
         self.session.add(audit)

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Literal
 
 
@@ -14,7 +14,7 @@ class Trade:
     maturity_date: date
     created_date: date
     expired: Literal["Y", "N"] = "N"
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self):
         # Normalize identifiers to uppercase to prevent casing-based duplicate anomalies
@@ -42,4 +42,4 @@ class Trade:
     def mark_expired(self) -> None:
         """Marks the trade as expired ('Y')."""
         self.expired = "Y"
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)

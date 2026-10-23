@@ -1,0 +1,84 @@
+@startuml sequence_auto_expiry
+skinparam style strictuml
+autonumber
+skinparam monochrome false
+skinparam roundcorner 8
+skinparam BoxPadding 10
+
+title Sequence Diagram: Dual-Layer Automated Trade Expiry (Deutsche Bank Trade Store)
+
+box "Scheduling & Client Layer" #E8F4F8
+    actor "Client / Trader" as Client
+    participant "BackgroundScheduler\n(Asyncio / Cron Worker)" as Scheduler
+end box
+
+box "Service Layer" #FFF9E6
+    participant "TradeStoreService" as Service
+    participant "IClockService" as Clock
+end box
+
+box "Persistence Layer" #EAF7EA
+    participant "ITradeRepository" as Repo
+    database "Trade Store DB" as DB
+end box
+
+== Layer 1: Proactive Background Auto-Expiry Job (Every N Seconds/Minutes) ==
+Scheduler -> Service : trigger_auto_expiry_job()
+activate Scheduler
+activate Service
+
+Service -> Clock : get_current_date_utc()
+activate Clock
+Clock --> Service : today_utc
+deactivate Clock
+
+Service -> Repo : mark_expired_trades(cutoff_date=today_utc)
+activate Repo
+Repo -> DB : UPDATE trades\nSET expired = 'Y'\nWHERE maturity_date < :today_utc\n  AND expired = 'N'
+DB --> Repo : rows_affected (e.g., 42 trades updated)
+
+alt rows_affected > 0
+    Repo -> DB : INSERT INTO trade_audit_events\n(action='AUTO_EXPIRED_BATCH', count=rows_affected)
+end
+
+Repo --> Service : expired_count
+deactivate Repo
+
+Service --> Scheduler : Job Completed (Logged metrics)
+deactivate Service
+deactivate Scheduler
+
+== Layer 2: Read-Time Dynamic Fallback (Zero Stale Data Window) ==
+note over Client, DB
+  Guarantees that even if the background cron hasn't executed yet,
+  a client reading a trade whose maturity date has passed NEVER receives expired='N'.
+end note
+
+Client -> Service : GET /api/v1/trades/{trade_id}
+activate Client
+activate Service
+
+Service -> Repo : get_by_trade_id(trade_id)
+activate Repo
+Repo -> DB : SELECT * FROM trades WHERE trade_id = :id
+DB --> Repo : trade_entity
+Repo --> Service : trade_entity
+deactivate Repo
+
+Service -> Clock : get_current_date_utc()
+activate Clock
+Clock --> Service : today_utc
+deactivate Clock
+
+alt trade_entity.maturity_date < today_utc AND trade_entity.expired == 'N'
+    Service -> Service : mark trade_entity.expired = 'Y' (In-memory)
+    Service -> Repo : mark_single_trade_expired(trade_id)
+    activate Repo
+    Repo -> DB : UPDATE trades SET expired = 'Y' WHERE trade_id = :id
+    deactivate Repo
+end
+
+Service --> Client : HTTP 200 OK (Trade with guaranteed accurate expired='Y')
+deactivate Service
+deactivate Client
+@enduml

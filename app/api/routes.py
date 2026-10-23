@@ -1,4 +1,3 @@
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +8,7 @@ from app.infrastructure.database import get_db_session
 from app.infrastructure.repository import SQLAlchemyTradeRepository
 
 router = APIRouter(prefix="/api/v1/trades", tags=["Trades"])
+
 
 # Default system clock provider, can be overridden in tests
 def get_clock_service() -> IClockService:
@@ -36,13 +36,13 @@ async def ingest_trade(
     service: TradeStoreService = Depends(get_trade_service),
 ):
     correlation_id = getattr(request.state, "correlation_id", None)
-    
+
     # Check if this is an insert or an update to set appropriate HTTP status code
     existing = await service.repository.get_by_id(payload.trade_id)
     is_new = existing is None
-    
+
     result = await service.process_trade(payload, correlation_id=correlation_id)
-    
+
     if is_new:
         response.status_code = status.HTTP_201_CREATED
     else:
