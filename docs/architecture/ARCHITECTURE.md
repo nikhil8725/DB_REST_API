@@ -97,11 +97,23 @@ In trading environments with thousands of messages arriving per second:
 
 ## 5. Architectural Blueprints (PlantUML)
 
-All diagrams are versioned in `docs/diagrams/`:
-* [Sequence: Ingestion & Validation Pipeline](file:///Users/nikhilbahalkar/Documents/antigravity/Deutsche_Bank_Assignment/docs/diagrams/sequence_trade_ingestion.puml)
-* [Sequence: Dual-Layer Automated Expiry](file:///Users/nikhilbahalkar/Documents/antigravity/Deutsche_Bank_Assignment/docs/diagrams/sequence_auto_expiry.puml)
-* [Class Diagram: Clean Architecture & Domain Entities](file:///Users/nikhilbahalkar/Documents/antigravity/Deutsche_Bank_Assignment/docs/diagrams/class_diagram.puml)
-* [C4 Component Diagram: End-to-End System Components](file:///Users/nikhilbahalkar/Documents/antigravity/Deutsche_Bank_Assignment/docs/diagrams/component_c4.puml)
+All diagrams are versioned in `docs/diagrams/` and visually rendered below:
+
+### 5.1 Sequence: Ingestion & Validation Pipeline
+![Sequence Ingestion](../diagrams/images/sequence_trade_ingestion.svg)
+*Source:* [`docs/diagrams/sequence_trade_ingestion.puml`](../diagrams/sequence_trade_ingestion.puml)
+
+### 5.2 Sequence: Dual-Layer Automated Expiry
+![Sequence Auto Expiry](../diagrams/images/sequence_auto_expiry.svg)
+*Source:* [`docs/diagrams/sequence_auto_expiry.puml`](../diagrams/sequence_auto_expiry.puml)
+
+### 5.3 Class Diagram: Clean Architecture & Domain Entities
+![Class Diagram](../diagrams/images/class_diagram.svg)
+*Source:* [`docs/diagrams/class_diagram.puml`](../diagrams/class_diagram.puml)
+
+### 5.4 C4 Component Diagram: End-to-End System Components
+![C4 Component Diagram](../diagrams/images/component_c4.svg)
+*Source:* [`docs/diagrams/component_c4.puml`](../diagrams/component_c4.puml)
 
 ---
 

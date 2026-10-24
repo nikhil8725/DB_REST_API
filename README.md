@@ -65,14 +65,35 @@ app/
 
 ---
 
-## 📊 PlantUML Diagrams
+## 📊 PlantUML Architectural Diagrams
 
-Comprehensive architectural diagrams are available in [`docs/diagrams/`](docs/diagrams/):
+The system architecture and business flows are fully documented and visually rendered in vector SVG formats.
 
-1. **[Sequence Diagram: Trade Ingestion & Validation](docs/diagrams/sequence_trade_ingestion.puml):** End-to-end trace of version checks, past maturity rejection, and audit logging.
-2. **[Sequence Diagram: Dual-Layer Automated Expiry](docs/diagrams/sequence_auto_expiry.puml):** Background scheduler sweep + read-time zero-stale fallback.
-3. **[Class Diagram](docs/diagrams/class_diagram.puml):** Domain entities, interfaces, repositories, and exception hierarchies.
-4. **[C4 Component Architecture](docs/diagrams/component_c4.puml):** System components, routers, service layer, and database.
+### 1. Sequence Diagram: Ingestion & Validation Pipeline
+Traces trade arrival, Pydantic sanitization, maturity validation, concurrency-safe row-locking, and version replacement/rejection.
+![Sequence Ingestion](docs/diagrams/images/sequence_trade_ingestion.svg)
+*Source:* [`docs/diagrams/sequence_trade_ingestion.puml`](docs/diagrams/sequence_trade_ingestion.puml)
+
+---
+
+### 2. Sequence Diagram: Dual-Layer Automated Expiry
+Demonstrates the proactive background scheduler sweep combined with read-time dynamic fallback.
+![Sequence Auto Expiry](docs/diagrams/images/sequence_auto_expiry.svg)
+*Source:* [`docs/diagrams/sequence_auto_expiry.puml`](docs/diagrams/sequence_auto_expiry.puml)
+
+---
+
+### 3. Class Diagram: Clean Architecture & Domain Entities
+Illustrates Clean / Hexagonal Architecture entity models, repository interfaces, and custom exception hierarchies.
+![Class Diagram](docs/diagrams/images/class_diagram.svg)
+*Source:* [`docs/diagrams/class_diagram.puml`](docs/diagrams/class_diagram.puml)
+
+---
+
+### 4. C4 Component Architecture Diagram
+Visualizes the end-to-end component boundaries, middlewares, routers, and database adapters.
+![C4 Component Diagram](docs/diagrams/images/component_c4.svg)
+*Source:* [`docs/diagrams/component_c4.puml`](docs/diagrams/component_c4.puml)
 
 ---
 
