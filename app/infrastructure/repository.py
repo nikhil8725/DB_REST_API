@@ -64,24 +64,30 @@ class SQLAlchemyTradeRepository:
         await self.session.flush()
         return self._to_entity(orm)
 
-    async def update(self, trade: Trade) -> Trade:
-        """Update an existing trade record."""
+    async def update(self, trade: Trade, enforce_version_ordering: bool = True) -> Trade | None:
+        """
+        Update an existing trade record atomically.
+        If enforce_version_ordering=True, only updates if DB version <= incoming trade version.
+        Returns the updated Trade if successful, or None if a concurrent update wrote a higher version.
+        """
         now = datetime.now(UTC)
-        stmt = (
-            update(TradeORM)
-            .where(TradeORM.trade_id == trade.trade_id)
-            .values(
-                version=trade.version,
-                counter_party_id=trade.counter_party_id,
-                portfolio_id=trade.portfolio_id,
-                maturity_date=trade.maturity_date,
-                created_date=trade.created_date,
-                expired=trade.expired,
-                updated_at=now,
-            )
+        stmt = update(TradeORM).where(TradeORM.trade_id == trade.trade_id)
+        if enforce_version_ordering:
+            stmt = stmt.where(TradeORM.version <= trade.version)
+
+        stmt = stmt.values(
+            version=trade.version,
+            counter_party_id=trade.counter_party_id,
+            portfolio_id=trade.portfolio_id,
+            maturity_date=trade.maturity_date,
+            created_date=trade.created_date,
+            expired=trade.expired,
+            updated_at=now,
         )
-        await self.session.execute(stmt)
+        result = await self.session.execute(stmt)
         await self.session.flush()
+        if result.rowcount == 0:
+            return None
         return trade
 
     async def list_all(self) -> list[Trade]:
@@ -89,6 +95,38 @@ class SQLAlchemyTradeRepository:
         stmt = select(TradeORM).order_by(TradeORM.trade_id, TradeORM.version.desc())
         result = await self.session.execute(stmt)
         return [self._to_entity(orm) for orm in result.scalars().all()]
+
+    async def list_paginated(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        expired: str | None = None,
+        portfolio_id: str | None = None,
+    ) -> tuple[list[Trade], int]:
+        """List trades with filtering and pagination, returning (items, total_count)."""
+        from sqlalchemy import func
+
+        conditions = []
+        if expired is not None:
+            conditions.append(TradeORM.expired == expired.strip().upper())
+        if portfolio_id is not None:
+            conditions.append(TradeORM.portfolio_id == portfolio_id.strip().upper())
+
+        # Count total matching rows
+        count_stmt = select(func.count(TradeORM.trade_id))
+        if conditions:
+            count_stmt = count_stmt.where(*conditions)
+        count_res = await self.session.execute(count_stmt)
+        total = count_res.scalar_one()
+
+        # Fetch paginated rows
+        stmt = select(TradeORM)
+        if conditions:
+            stmt = stmt.where(*conditions)
+        stmt = stmt.order_by(TradeORM.trade_id).limit(limit).offset(offset)
+        result = await self.session.execute(stmt)
+        items = [self._to_entity(orm) for orm in result.scalars().all()]
+        return items, total
 
     async def expire_trades_before(self, cutoff_date: date) -> int:
         """Bulk-update all trades whose maturity_date < cutoff_date and expired == 'N'."""

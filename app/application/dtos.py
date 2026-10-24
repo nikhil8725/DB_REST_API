@@ -66,3 +66,14 @@ class TradeResponseDTO(BaseModel):
     expired: Literal["Y", "N"]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedTradeResponseDTO(BaseModel):
+    """Paginated response containing list of trades and pagination metadata."""
+
+    total: int = Field(..., description="Total matching trades count")
+    limit: int = Field(..., description="Page size limit applied")
+    offset: int = Field(..., description="Page offset applied")
+    items: list[TradeResponseDTO] = Field(..., description="List of trade items on current page")
+
+    model_config = ConfigDict(from_attributes=True)

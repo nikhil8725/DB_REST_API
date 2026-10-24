@@ -1,6 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.dtos import TradeCreateDTO, TradeResponseDTO
+from app.application.dtos import (
+    PaginatedTradeResponseDTO,
+    TradeCreateDTO,
+    TradeResponseDTO,
+)
 from app.domain.clock import IClockService
 from app.domain.exceptions import LowerVersionRejectedException, PastMaturityDateException
 from app.domain.models import Trade
@@ -100,16 +104,27 @@ class TradeStoreService:
             existing_trade.created_date = today
             existing_trade.expired = "N"
 
-            updated = await self.repository.update(existing_trade)
+            updated_trade = await self.repository.update(existing_trade)
+            if not updated_trade:
+                latest = await self.repository.get_by_id(dto.trade_id)
+                current_v = latest.version if latest else existing_trade.version
+                await self.session.rollback()
+                raise LowerVersionRejectedException(
+                    trade_id=dto.trade_id,
+                    incoming_version=dto.version,
+                    current_version=current_v,
+                    correlation_id=correlation_id,
+                )
+
             await self.repository.log_audit(
-                trade_id=updated.trade_id,
-                version=updated.version,
+                trade_id=updated_trade.trade_id,
+                version=updated_trade.version,
                 action="OVERWRITE_SAME_VERSION",
                 correlation_id=correlation_id,
                 details="Replaced record with same version",
             )
             await self.session.commit()
-            return self._to_dto(updated)
+            return self._to_dto(updated_trade)
 
         # Rule 1C: Higher version received -> Upgrade record
         existing_trade.version = dto.version
@@ -119,16 +134,27 @@ class TradeStoreService:
         existing_trade.created_date = today
         existing_trade.expired = "N"
 
-        updated = await self.repository.update(existing_trade)
+        updated_trade = await self.repository.update(existing_trade)
+        if not updated_trade:
+            latest = await self.repository.get_by_id(dto.trade_id)
+            current_v = latest.version if latest else existing_trade.version
+            await self.session.rollback()
+            raise LowerVersionRejectedException(
+                trade_id=dto.trade_id,
+                incoming_version=dto.version,
+                current_version=current_v,
+                correlation_id=correlation_id,
+            )
+
         await self.repository.log_audit(
-            trade_id=updated.trade_id,
-            version=updated.version,
+            trade_id=updated_trade.trade_id,
+            version=updated_trade.version,
             action="UPDATE_HIGHER_VERSION",
             correlation_id=correlation_id,
             details=f"Upgraded to version {dto.version}",
         )
         await self.session.commit()
-        return self._to_dto(updated)
+        return self._to_dto(updated_trade)
 
     async def get_trade(self, trade_id: str) -> TradeResponseDTO | None:
         """Fetch trade with read-time dynamic expiry check."""
@@ -140,7 +166,7 @@ class TradeStoreService:
         today = self.clock.get_today()
         if trade.is_matured(today) and trade.expired == "N":
             trade.mark_expired()
-            await self.repository.update(trade)
+            await self.repository.update(trade, enforce_version_ordering=False)
             await self.session.commit()
 
         return self._to_dto(trade)
@@ -155,7 +181,7 @@ class TradeStoreService:
         for t in trades:
             if t.is_matured(today) and t.expired == "N":
                 t.mark_expired()
-                await self.repository.update(t)
+                await self.repository.update(t, enforce_version_ordering=False)
                 needs_commit = True
             result.append(self._to_dto(t))
 
@@ -163,6 +189,41 @@ class TradeStoreService:
             await self.session.commit()
 
         return result
+
+    async def list_trades_paginated(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        expired: str | None = None,
+        portfolio_id: str | None = None,
+    ) -> PaginatedTradeResponseDTO:
+        """List trades with pagination, filters, and dynamic read-time expiry check."""
+        items, total = await self.repository.list_paginated(
+            limit=limit,
+            offset=offset,
+            expired=expired,
+            portfolio_id=portfolio_id,
+        )
+        today = self.clock.get_today()
+        result = []
+        needs_commit = False
+
+        for t in items:
+            if t.is_matured(today) and t.expired == "N":
+                t.mark_expired()
+                await self.repository.update(t)
+                needs_commit = True
+            result.append(self._to_dto(t))
+
+        if needs_commit:
+            await self.session.commit()
+
+        return PaginatedTradeResponseDTO(
+            total=total,
+            limit=limit,
+            offset=offset,
+            items=result,
+        )
 
     async def run_expiry_sweep(self) -> int:
         """Rule 3: Bulk-expire all trades where maturity_date < today."""

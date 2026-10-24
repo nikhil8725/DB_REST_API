@@ -112,12 +112,25 @@ async def test_e2e_assignment_table_scenarios(client: AsyncClient):
     assert res_single.status_code == 200
     assert res_single.json()["trade_id"] == "T1"
 
-    # 7. Query all trades
-    list_res = await client.get("/api/v1/trades")
+    # 7. Query all trades with pagination
+    list_res = await client.get("/api/v1/trades?limit=10&offset=0")
     assert list_res.status_code == 200
-    assert len(list_res.json()) == 2
+    paginated_data = list_res.json()
+    assert paginated_data["total"] == 2
+    assert paginated_data["limit"] == 10
+    assert paginated_data["offset"] == 0
+    assert len(paginated_data["items"]) == 2
 
-    # 8. Query nonexistent trade -> 404
+    # 8. Query with filtering by portfolio_id
+    b1_res = await client.get("/api/v1/trades?portfolio_id=B1")
+    assert b1_res.status_code == 200
+    assert b1_res.json()["total"] == 2
+
+    empty_res = await client.get("/api/v1/trades?portfolio_id=UNKNOWN_PORTFOLIO")
+    assert empty_res.status_code == 200
+    assert empty_res.json()["total"] == 0
+
+    # 9. Query nonexistent trade -> 404
     res_404 = await client.get("/api/v1/trades/UNKNOWN")
     assert res_404.status_code == 404
 

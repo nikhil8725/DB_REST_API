@@ -1,7 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.dtos import TradeCreateDTO, TradeResponseDTO
+from app.application.dtos import (
+    PaginatedTradeResponseDTO,
+    TradeCreateDTO,
+    TradeResponseDTO,
+)
 from app.application.service import TradeStoreService
 from app.domain.clock import IClockService, SystemClockService
 from app.infrastructure.database import get_db_session
@@ -71,10 +77,22 @@ async def get_trade(
 
 @router.get(
     "",
-    response_model=list[TradeResponseDTO],
-    summary="List all stored trades",
+    response_model=PaginatedTradeResponseDTO,
+    summary="List stored trades with pagination and filtering",
+    description="Query stored trades with page limits, offsets, and optional filtering by expired flag or portfolio ID.",
 )
 async def list_trades(
+    limit: int = Query(default=50, ge=1, le=500, description="Page limit (default: 50, max: 500)"),
+    offset: int = Query(default=0, ge=0, description="Page offset index"),
+    expired: Literal["Y", "N"] | None = Query(
+        default=None, description="Filter by expired flag (Y/N)"
+    ),
+    portfolio_id: str | None = Query(default=None, description="Filter by Portfolio ID (e.g. B1)"),
     service: TradeStoreService = Depends(get_trade_service),
 ):
-    return await service.list_trades()
+    return await service.list_trades_paginated(
+        limit=limit,
+        offset=offset,
+        expired=expired,
+        portfolio_id=portfolio_id,
+    )
